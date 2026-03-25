@@ -12,6 +12,40 @@ gptmail_base: "https://your-domain.com"
 # openai注册时代理地址，例子：http://127.0.0.1:7897。如果是国外服务器此项可以不填
 default_proxy: ""
 
+
+# Clash 节点智能轮换（本地使用clash软件）
+clash_proxy_pool:
+  # 【开关】是否在每次注册前自动通过 Clash 切换节点
+  enable: false
+  # Clash 的外部控制 API 地址 (注意端口通常是 9090 或 9097)
+  api_url: "http://127.0.0.1:9097"
+  # 你机场包含所有节点的策略组名称，带有 Emoji 也没关系
+  group_name: "节点选择"
+  # Clash 的外部控制鉴权秘钥 (Secret)
+  secret: "set-your-secret"
+  # 用于连接外网测活的本地代理端口 (通常与上方的 default_proxy 保持一致)
+  test_proxy_url: ""
+  # 节点过滤黑名单：严格剔除包含以下关键词的节点 (如港台地区、说明性节点)
+  blacklist:
+    - "自动"
+    - "故障"
+    - "剩余"
+    - "到期"
+    - "官网"
+    - "Traffic"
+    - "DIRECT"
+    - "REJECT"
+    - "港"
+    - "HK"
+    - "Hongkong"
+    - "台"
+    - "TW"
+    - "Taiwan"
+    - "中"
+    - "CN"
+    - "China"
+    - "回国"
+
 # [模式 "imap" 专属配置] (CF Catch-all 转发接收端)
 imap:
   # 默认为gmail IMAP 服务器地址,QQ为imap.qq.com。不建议用QQ
@@ -65,3 +99,10 @@ cpa_mode:
   min_remaining_weekly_percent: 80
   # CPA 仓库巡检的间隔时间，默认每60分钟巡检一次
   check_interval_minutes: 60
+
+# 常规量产模式专属配置
+normal_mode:
+  # 每次循环注册成功或失败后，最短等待时间 (秒)
+  sleep_min: 5
+  # 每次循环注册成功或失败后，最长等待时间 (秒)
+  sleep_max: 30
