@@ -121,8 +121,8 @@ enable_email_masking: true
 
 
 #注册后等待多少秒在去拿tokens,默认是5-15秒之内
-login_delay_min: 5
-login_delay_max: 15
+login_delay_min: 20
+login_delay_max: 45
 
 # [Token 存放目录]
 # 默认存放跟脚本一个目录
