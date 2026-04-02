@@ -6,24 +6,42 @@ import secrets
 import glob
 import json
 import time
+import sys
 import random
 import string
 import urllib.request
 import urllib.parse
 from collections import deque
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse,StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from cloudflare import Cloudflare
-
+from contextlib import asynccontextmanager
 from utils import core_engine
 from utils.config import reload_all_configs
 from utils import db_manager
 from utils.sub2api_client import Sub2APIClient
-app = FastAPI(title="Wenfxl Codex Manager")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    print("\n" + "="*65, flush=True)
+    print("🛑 接收到系统终止信号，正在强制结束引擎...", flush=True)
+    
+    try:
+        if engine.is_running():
+            engine.stop()
+    except Exception:
+        pass
+        
+    print("💥 已强制斩断所有底层连接，进程秒退！", flush=True)
+    print("="*65 + "\n", flush=True)
+    os._exit(0)
+
+app = FastAPI(title="Wenfxl Codex Manager", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
@@ -551,26 +569,30 @@ async def clear_backend_logs(token: str = Depends(verify_token)):
     log_history.clear()
     return {"status": "success"}
 
-@app.websocket("/ws/logs")
-async def websocket_logs(websocket: WebSocket, token: str = Query(None)):
+@app.get("/api/logs/stream")
+async def stream_logs(request: Request, token: str = Query(None)):
     if token not in VALID_TOKENS:
-        await websocket.close(code=1008)
-        return
-    await websocket.accept()
-    for old_msg in log_history:
-        await websocket.send_text(old_msg)
-    try:
-        while True:
-            if not core_engine.log_queue.empty():
-                msg = core_engine.log_queue.get_nowait()
-                log_history.append(msg)
-                await websocket.send_text(msg)
-            else:
-                await asyncio.sleep(0.1)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    async def log_generator():
+        for old_msg in log_history:
+            yield f"data: {old_msg}\n\n"
+        
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                    
+                if not core_engine.log_queue.empty():
+                    msg = core_engine.log_queue.get_nowait()
+                    log_history.append(msg)
+                    yield f"data: {msg}\n\n"
+                else:
+                    await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(log_generator(), media_type="text/event-stream")
 
 @app.get("/")
 async def get_dashboard():
@@ -589,5 +611,8 @@ if __name__ == "__main__":
     print(f"[{core_engine.ts()}] [系统] 如果遇到问题请更换域名解决，目前eu.cc，xyz，cn，edu.cc等常见域名均不可用，请更换为冷门域名")
     print("-" * 65)
     print(f"[{core_engine.ts()}] [系统] Web 控制台已准备就绪，等待下发指令...")
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    sys.__stdout__.write(f"[{core_engine.ts()}] [系统] 控制台地址：http://127.0.0.1:8000 \n")
+    sys.__stdout__.write(f"[{core_engine.ts()}] [系统] 控制台初始密码：admin \n")
+    sys.__stdout__.write(f"[{core_engine.ts()}] [系统] 结束请猛猛重复按CTRL+C \n")
+    sys.__stdout__.flush()
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning", access_log=False, timeout_graceful_shutdown=1)
